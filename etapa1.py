@@ -44,7 +44,8 @@ class Tractor(ap.Agent):
         self.speed = TRACTOR_SPEED
         self.carga_max = 50
         self.carga_actual = 0
-        self.combustible = 100
+        self.combustible_max = 50
+        self.combustible = self.combustible_max
         self.eficiencia = 0.9
         self.position = np.array(initial_position, dtype=float)
         self.objetivo_actual = None
@@ -180,7 +181,7 @@ class HarvestSimulation(ap.Model):
         margin_top = 20
         for idx, tractor in enumerate(self.tractores):
             # Dibujar barra de combustible
-            fuel_ratio = tractor.combustible / 1000
+            fuel_ratio = tractor.combustible / tractor.combustible_max
             pygame.draw.rect(screen, COLOR_FUEL, (WIDTH - 180, margin_top + idx * 70, int(bar_width * fuel_ratio), bar_height))
             pygame.draw.rect(screen, (0, 0, 0), (WIDTH - 180, margin_top + idx * 70, bar_width, bar_height), 2)
 
