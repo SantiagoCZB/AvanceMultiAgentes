@@ -1,130 +1,142 @@
-import agentpy as ap
 import pygame
+import numpy as np
 import random
-import heapq
+import agentpy as ap
 
-# Parámetros de simulación
-GRID_SIZE = 20  # Tamaño de la cuadrícula (20x20)
-CELL_SIZE = 30  # Tamaño de cada celda en píxeles
-SCREEN_SIZE = GRID_SIZE * CELL_SIZE
+# Configuración inicial
+WIDTH, HEIGHT = 600, 600
+GRID_SIZE = 20
+ROWS, COLS = HEIGHT // GRID_SIZE, WIDTH // GRID_SIZE
+TRACTOR_COUNT = 4
+TRACTOR_SPEED = 5
 
 # Colores
-WHITE = (255, 255, 255)
-GREEN = (34, 139, 34)  # Verde para el campo
-BROWN = (139, 69, 19)  # Marrón para las parcelas cosechadas
-BLUE = (0, 0, 255)
-BLACK = (0, 0, 0)      # Para los bordes de las celdas
+COLOR_EMPTY = (255, 255, 255)
+COLOR_HARVESTED = (200, 200, 200)
+COLOR_READY = (100, 255, 100)
+COLOR_TRACTOR = (255, 100, 100)
 
-# Configuración de pygame
+# Inicialización de pygame
 pygame.init()
-screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
-pygame.display.set_caption("Simulación de Tractores con Dijkstra")
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Simulación de Cosecha con AgentPy")
 
-# Definir el agente Tractor
-class Tractor(ap.Agent):
-    def setup(self, start_positions):
-        # Inicializar variables de cada tractor
-        self.fuel = 300  # Combustible inicial
-        # Seleccionar una posición única de la fila inferior
-        self.position = start_positions.pop()
-        self.color = BLUE  # Color del tractor
-        self.path = []  # Camino a seguir (listado de posiciones)
-    
-    def find_closest_target(self, field):
-        """Encuentra la parcela sin cosechar más cercana usando Dijkstra"""
-        start = tuple(self.position)
-        queue = [(0, start)]
-        distances = {start: 0}
-        previous = {start: None}
-        closest_target = None
-        closest_distance = float('inf')
-
-        while queue:
-            dist, current = heapq.heappop(queue)
-            x, y = current
-            
-            # Si encontramos una parcela sin cosechar, la tomamos como objetivo
-            if field[y][x] == 0:
-                if dist < closest_distance:
-                    closest_target = current
-                    closest_distance = dist
-                    break
-
-            # Revisar los vecinos
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                neighbor = (x + dx, y + dy)
-                if 0 <= neighbor[0] < GRID_SIZE and 0 <= neighbor[1] < GRID_SIZE:
-                    new_dist = dist + 1
-                    if new_dist < distances.get(neighbor, float('inf')):
-                        distances[neighbor] = new_dist
-                        previous[neighbor] = current
-                        heapq.heappush(queue, (new_dist, neighbor))
-        
-        # Si se encontró una parcela sin cosechar, reconstruir el camino
-        path = []
-        if closest_target:
-            while closest_target is not None:
-                path.append(list(closest_target))
-                closest_target = previous[closest_target]
-            path.reverse()
-        return path[1:]  # Omitir la posición inicial del camino
-
-    def move(self, field, occupied_positions):
-        """Mueve el tractor a lo largo de su camino y busca nuevo objetivo si necesario"""
-        if self.fuel > 0 and not self.path:
-            self.path = self.find_closest_target(field)  # Encuentra nuevo objetivo
-        
-        if self.fuel > 0 and self.path:
-            next_position = self.path.pop(0)
-            
-            # Verificar que la siguiente posición no esté ocupada
-            if tuple(next_position) not in occupied_positions:
-                self.position = next_position
-                self.fuel -= 1
-
-# Definir el campo
-class Campo(ap.Model):
+# Clase para representar una parcela como un agente de AgentPy
+class Parcel(ap.Agent):
     def setup(self):
-        # Crear lista de posiciones de inicio en la fila inferior (y = GRID_SIZE - 1)
-        start_positions = [[x, GRID_SIZE - 1] for x in range(GRID_SIZE)]
-        random.shuffle(start_positions)  # Mezclar para asignar aleatoriamente
-
-        # Crear lista de agentes (tractores) y asignar posiciones de inicio
-        self.tractors = ap.AgentList(self, 5, Tractor, start_positions=start_positions[:5])
-        self.field = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]  # Campo vacío
-        
-    def step(self):
-        # Almacenar posiciones ocupadas para evitar colisiones
-        occupied_positions = {tuple(tractor.position) for tractor in self.tractors}
-
-        # Mover tractores y actualizar el estado del campo
-        for tractor in self.tractors:
-            tractor.move(self.field, occupied_positions)
-            x, y = tractor.position
-            self.field[y][x] = 1  # Marcar como cosechado
-
-# Función para dibujar la simulación en pygame
-def draw(simulation):
-    screen.fill(WHITE)
-    # Dibujar campo
-    for y in range(GRID_SIZE):
-        for x in range(GRID_SIZE):
-            color = BROWN if simulation.field[y][x] == 1 else GREEN  # Cambiar de verde a marrón
-            pygame.draw.rect(screen, color, pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-            pygame.draw.rect(screen, BLACK, pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE), 1)
+        self.ready_to_harvest = True
+        self.harvested = False
+        self.reservada = False  # Nueva propiedad para indicar si está reservada por un tractor
+        self.humidity = random.uniform(0.5, 1)
     
-    # Dibujar tractores
-    for tractor in simulation.tractors:
-        x, y = tractor.position
-        pygame.draw.circle(screen, tractor.color, (x * CELL_SIZE + CELL_SIZE // 2, y * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 3)
+    def harvest(self):
+        if self.ready_to_harvest:
+            self.ready_to_harvest = False
+            self.harvested = True
+            self.reservada = False  # Liberar reserva al cosechar
 
-    pygame.display.flip()
+# Clase para el tractor/agente
+class Tractor(ap.Agent):
+    def setup(self, initial_position):
+        self.speed = TRACTOR_SPEED
+        self.carga_max = 50000
+        self.carga_actual = 0
+        self.combustible = 100
+        self.consumo_combustible = 0.00
+        self.eficiencia = 0.9
+        self.position = np.array(initial_position, dtype=float)
+        self.objetivo_actual = None  # Guardar la parcela actual hacia la que se dirige
 
-# Inicializar simulación
-simulation = Campo()
-simulation.setup()
+    def mover(self, destino):
+        if self.combustible > 0:
+            direccion = destino - self.position
+            distancia = np.linalg.norm(direccion)
+            if distancia > 0:
+                direccion = (direccion / distancia) * self.speed
+                self.position += direccion
+                self.combustible -= self.consumo_combustible * np.linalg.norm(direccion)
+                
+    def cargar(self):
+        if self.carga_actual < self.carga_max:
+            self.carga_actual += 1
+            return True
+        return False
 
-# Loop principal
+# Clase para el modelo de simulación
+class HarvestSimulation(ap.Model):
+    def setup(self):
+        # Creación de campo y tractores
+        self.campo = [[Parcel(self) for _ in range(COLS)] for _ in range(ROWS)]
+        
+        # Posicionar tractores en la parte más baja y distribuidos uniformemente
+        espaciado_x = WIDTH // TRACTOR_COUNT
+        posiciones_iniciales = [
+            (i * espaciado_x + espaciado_x // 2, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
+        ]
+        
+        self.tractores = [Tractor(self, initial_position=pos) for pos in posiciones_iniciales]
+    
+    def obtener_parcela_prioritaria(self, tractor):
+        min_dist = float('inf')
+        objetivo = None
+        tractor_pos_grid = (int(tractor.position[1] // GRID_SIZE), int(tractor.position[0] // GRID_SIZE))
+        
+        for row in range(ROWS):
+            for col in range(COLS):
+                parcela = self.campo[row][col]
+                # Solo considerar parcelas que están listas y no están reservadas
+                if parcela.ready_to_harvest and not parcela.reservada:
+                    distancia = np.linalg.norm(np.array(tractor_pos_grid) - np.array([row, col]))
+                    if distancia < min_dist:
+                        min_dist = distancia
+                        objetivo = (row, col)
+        
+        # Reservar la parcela seleccionada
+        if objetivo:
+            self.campo[objetivo[0]][objetivo[1]].reservada = True
+        return objetivo
+
+    def step(self):
+        # Dibujado en Pygame
+        screen.fill(COLOR_EMPTY)
+        self.dibujar_campo()
+        
+        for tractor in self.tractores:
+            # Solo buscar un nuevo objetivo si el tractor no tiene uno
+            if tractor.objetivo_actual is None or self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvested:
+                tractor.objetivo_actual = self.obtener_parcela_prioritaria(tractor)
+            
+            if tractor.objetivo_actual:
+                destino = np.array([
+                    tractor.objetivo_actual[1] * GRID_SIZE + GRID_SIZE // 2, 
+                    tractor.objetivo_actual[0] * GRID_SIZE + GRID_SIZE // 2
+                ])
+                tractor.mover(destino)
+                
+                # Si el tractor alcanza la parcela, realiza la cosecha
+                if np.linalg.norm(destino - tractor.position) < tractor.speed:
+                    if tractor.cargar():
+                        self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
+                    tractor.objetivo_actual = None  # Liberar el objetivo para buscar uno nuevo
+        
+        self.dibujar_tractores()
+        pygame.display.flip()
+
+    def dibujar_campo(self):
+        for row in range(ROWS):
+            for col in range(COLS):
+                x, y = col * GRID_SIZE, row * GRID_SIZE
+                parcela = self.campo[row][col]
+                color = COLOR_HARVESTED if parcela.harvested else COLOR_READY if parcela.ready_to_harvest else COLOR_EMPTY
+                pygame.draw.rect(screen, color, (x, y, GRID_SIZE, GRID_SIZE))
+    
+    def dibujar_tractores(self):
+        for tractor in self.tractores:
+            pygame.draw.circle(screen, COLOR_TRACTOR, tractor.position.astype(int), GRID_SIZE // 3)
+
+# Ejecución de la simulación
+model = HarvestSimulation()
+model.setup()
 running = True
 clock = pygame.time.Clock()
 
@@ -133,8 +145,7 @@ while running:
         if event.type == pygame.QUIT:
             running = False
     
-    simulation.step()
-    draw(simulation)
-    clock.tick(6)  # Velocidad de la simulación (10 FPS)
+    model.step()
+    clock.tick(30)
 
 pygame.quit()
