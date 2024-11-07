@@ -44,7 +44,7 @@ class Tractor(ap.Agent):
         self.speed = TRACTOR_SPEED
         self.carga_max = 50
         self.carga_actual = 0
-        self.combustible_max = 50
+        self.combustible_max = 1000
         self.combustible = self.combustible_max
         self.eficiencia = 0.9
         self.position = np.array(initial_position, dtype=float)
@@ -99,9 +99,9 @@ class HarvestSimulation(ap.Model):
     def setup(self):
         self.campo = [[Parcel(self) for _ in range(COLS)] for _ in range(ROWS)]
         
-        espaciado_x = (WIDTH - 200) // TRACTOR_COUNT
+        espaciado_x = (WIDTH - 180) // (TRACTOR_COUNT)
         posiciones_iniciales = [
-            (i * espaciado_x + espaciado_x // 2, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
+            (WIDTH - 200 - i * espaciado_x, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
         ]
         
         self.tractores = [Tractor(self, initial_position=pos) for pos in posiciones_iniciales]
