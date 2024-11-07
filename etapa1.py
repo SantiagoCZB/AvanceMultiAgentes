@@ -46,7 +46,6 @@ class Tractor(ap.Agent):
         self.carga_actual = 0
         self.combustible_max = 1000
         self.combustible = self.combustible_max
-        self.eficiencia = 0.9
         self.position = np.array(initial_position, dtype=float)
         self.objetivo_actual = None
         self.descargando = False
