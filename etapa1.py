@@ -15,6 +15,8 @@ COLOR_EMPTY = (255, 255, 255)
 COLOR_HARVESTED = (200, 200, 200)
 COLOR_READY = (100, 255, 100)
 COLOR_TRACTOR = (255, 100, 100)
+COLOR_CONTAINER = (150, 150, 255)
+COLOR_UNLOADING = (255, 255, 0)
 
 # Inicialización de pygame
 pygame.init()
@@ -26,49 +28,75 @@ class Parcel(ap.Agent):
     def setup(self):
         self.ready_to_harvest = True
         self.harvested = False
-        self.reservada = False  # Nueva propiedad para indicar si está reservada por un tractor
+        self.reservada = False
         self.humidity = random.uniform(0.5, 1)
     
     def harvest(self):
         if self.ready_to_harvest:
             self.ready_to_harvest = False
             self.harvested = True
-            self.reservada = False  # Liberar reserva al cosechar
+            self.reservada = False
 
 # Clase para el tractor/agente
 class Tractor(ap.Agent):
     def setup(self, initial_position):
         self.speed = TRACTOR_SPEED
-        self.carga_max = 50000
+        self.carga_max = 50
         self.carga_actual = 0
-        self.combustible = 100
-        self.consumo_combustible = 0.00
+        self.combustible = 1000
         self.eficiencia = 0.9
         self.position = np.array(initial_position, dtype=float)
-        self.objetivo_actual = None  # Guardar la parcela actual hacia la que se dirige
-
+        self.objetivo_actual = None
+        self.descargando = False
+        self.descarga_duracion = 0
+        self.contador_descarga = 0
+        self.contenedor = Container(self.position.copy())
+    
     def mover(self, destino):
-        if self.combustible > 0:
+        if self.combustible > 0 and not self.descargando:
             direccion = destino - self.position
             distancia = np.linalg.norm(direccion)
             if distancia > 0:
                 direccion = (direccion / distancia) * self.speed
                 self.position += direccion
-                self.combustible -= self.consumo_combustible * np.linalg.norm(direccion)
-                
+                self.combustible -= 0.05 * np.linalg.norm(direccion)
+
     def cargar(self):
         if self.carga_actual < self.carga_max:
             self.carga_actual += 1
             return True
         return False
 
+    def descargar(self):
+        self.descargando = True
+        self.carga_actual = 0
+        self.descarga_duracion = 30  # Duración de descarga
+        self.contador_descarga = self.descarga_duracion
+
+    def mover_a_contenedor(self):
+        # Mueve el tractor hacia el contenedor para la descarga
+        self.mover(self.contenedor.position)
+
+# Clase para el contenedor
+class Container:
+    def __init__(self, initial_position):
+        self.position = np.array(initial_position, dtype=float)
+        self.color = COLOR_CONTAINER
+        self.velocidad = TRACTOR_SPEED * 1.2
+
+    def seguir_tractor(self, tractor_pos):
+        # Mueve el contenedor para seguir al tractor con retraso
+        direccion = tractor_pos - self.position
+        distancia = np.linalg.norm(direccion)
+        if distancia > GRID_SIZE * 2:  # Mantenerse a una distancia
+            direccion = (direccion / distancia) * self.velocidad
+            self.position += direccion
+
 # Clase para el modelo de simulación
 class HarvestSimulation(ap.Model):
     def setup(self):
-        # Creación de campo y tractores
         self.campo = [[Parcel(self) for _ in range(COLS)] for _ in range(ROWS)]
         
-        # Posicionar tractores en la parte más baja y distribuidos uniformemente
         espaciado_x = WIDTH // TRACTOR_COUNT
         posiciones_iniciales = [
             (i * espaciado_x + espaciado_x // 2, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
@@ -84,40 +112,49 @@ class HarvestSimulation(ap.Model):
         for row in range(ROWS):
             for col in range(COLS):
                 parcela = self.campo[row][col]
-                # Solo considerar parcelas que están listas y no están reservadas
                 if parcela.ready_to_harvest and not parcela.reservada:
                     distancia = np.linalg.norm(np.array(tractor_pos_grid) - np.array([row, col]))
                     if distancia < min_dist:
                         min_dist = distancia
                         objetivo = (row, col)
         
-        # Reservar la parcela seleccionada
         if objetivo:
             self.campo[objetivo[0]][objetivo[1]].reservada = True
         return objetivo
 
     def step(self):
-        # Dibujado en Pygame
         screen.fill(COLOR_EMPTY)
         self.dibujar_campo()
         
         for tractor in self.tractores:
-            # Solo buscar un nuevo objetivo si el tractor no tiene uno
-            if tractor.objetivo_actual is None or self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvested:
-                tractor.objetivo_actual = self.obtener_parcela_prioritaria(tractor)
-            
-            if tractor.objetivo_actual:
-                destino = np.array([
-                    tractor.objetivo_actual[1] * GRID_SIZE + GRID_SIZE // 2, 
-                    tractor.objetivo_actual[0] * GRID_SIZE + GRID_SIZE // 2
-                ])
-                tractor.mover(destino)
+            if tractor.descargando:
+                tractor.contador_descarga -= 1
+                tractor.contenedor.color = COLOR_UNLOADING
+                if tractor.contador_descarga <= 0:
+                    tractor.descargando = False
+                    tractor.contenedor.color = COLOR_CONTAINER
+            else:
+                if tractor.carga_actual >= tractor.carga_max:
+                    tractor.mover_a_contenedor()
+                    if np.linalg.norm(tractor.position - tractor.contenedor.position) < GRID_SIZE:
+                        tractor.descargar()
+                else:
+                    if tractor.objetivo_actual is None or self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvested:
+                        tractor.objetivo_actual = self.obtener_parcela_prioritaria(tractor)
+                    
+                    if tractor.objetivo_actual:
+                        destino = np.array([
+                            tractor.objetivo_actual[1] * GRID_SIZE + GRID_SIZE // 2, 
+                            tractor.objetivo_actual[0] * GRID_SIZE + GRID_SIZE // 2
+                        ])
+                        tractor.mover(destino)
+                        
+                        if np.linalg.norm(destino - tractor.position) < tractor.speed:
+                            if tractor.cargar():
+                                self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
+                            tractor.objetivo_actual = None
                 
-                # Si el tractor alcanza la parcela, realiza la cosecha
-                if np.linalg.norm(destino - tractor.position) < tractor.speed:
-                    if tractor.cargar():
-                        self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
-                    tractor.objetivo_actual = None  # Liberar el objetivo para buscar uno nuevo
+            tractor.contenedor.seguir_tractor(tractor.position)
         
         self.dibujar_tractores()
         pygame.display.flip()
@@ -132,6 +169,7 @@ class HarvestSimulation(ap.Model):
     
     def dibujar_tractores(self):
         for tractor in self.tractores:
+            pygame.draw.circle(screen, tractor.contenedor.color, tractor.contenedor.position.astype(int), GRID_SIZE // 3)
             pygame.draw.circle(screen, COLOR_TRACTOR, tractor.position.astype(int), GRID_SIZE // 3)
 
 # Ejecución de la simulación
