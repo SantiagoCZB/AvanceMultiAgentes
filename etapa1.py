@@ -73,10 +73,17 @@ class Tractor(ap.Agent):
         self.carga_actual = 0
         self.descarga_duracion = 30  # Duración de descarga
         self.contador_descarga = self.descarga_duracion
+        self.contenedor.ir_al_silo_flag = True  # Enviar mensaje al contenedor para ir al silo
+
+    def esperar(self):
+        self.speed = 0
 
     def mover_a_contenedor(self):
         # Mueve el tractor hacia el contenedor para la descarga
-        self.mover(self.contenedor.position)
+        if not self.contenedor.ir_al_silo_flag:
+            self.mover(self.contenedor.position)
+        else:
+            self.esperar()
 
 # Clase para el contenedor
 class Container:
@@ -84,14 +91,29 @@ class Container:
         self.position = np.array(initial_position, dtype=float)
         self.color = COLOR_CONTAINER
         self.velocidad = TRACTOR_SPEED * 1.2
+        self.ir_al_silo_flag = False  # Bandera para ir al silo
 
     def seguir_tractor(self, tractor_pos):
         # Mueve el contenedor para seguir al tractor con retraso
-        direccion = tractor_pos - self.position
-        distancia = np.linalg.norm(direccion)
-        if distancia > GRID_SIZE * 2:  # Mantenerse a una distancia
-            direccion = (direccion / distancia) * self.velocidad
-            self.position += direccion
+        if not self.ir_al_silo_flag:
+            direccion = tractor_pos - self.position
+            distancia = np.linalg.norm(direccion)
+            if distancia > GRID_SIZE * 2:  # Mantenerse a una distancia
+                direccion = (direccion / distancia) * self.velocidad
+                self.position += direccion
+
+    def ir_al_silo(self, silo_pos):
+        # Mueve el contenedor hacia el silo
+        if self.ir_al_silo_flag:
+            direccion = silo_pos - self.position
+            distancia = np.linalg.norm(direccion)
+            if distancia > 10:
+                print("Moviendo contenedor al silo")
+                direccion = (direccion / distancia) * self.velocidad
+                self.position += direccion
+            if distancia < 10:
+                self.ir_al_silo_flag = False
+
 
 # Clase para el modelo de simulación
 class HarvestSimulation(ap.Model):
@@ -104,6 +126,9 @@ class HarvestSimulation(ap.Model):
         ]
         
         self.tractores = [Tractor(self, initial_position=pos) for pos in posiciones_iniciales]
+        
+        margin_top = 20
+        self.silo_position = (WIDTH - 180, margin_top + len(self.tractores) * 70 + 30)
     
     def obtener_parcela_prioritaria(self, tractor):
         min_dist = float('inf')
@@ -156,10 +181,14 @@ class HarvestSimulation(ap.Model):
                                 self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
                             tractor.objetivo_actual = None
                 
-            tractor.contenedor.seguir_tractor(tractor.position)
+            if tractor.contenedor.ir_al_silo_flag:
+                tractor.contenedor.ir_al_silo(self.silo_position)
+            else:
+                tractor.contenedor.seguir_tractor(tractor.position)
         
         self.dibujar_tractores()
         self.dibujar_graficas()
+        self.dibujar_silo()
         pygame.display.flip()
 
     def dibujar_campo(self):
@@ -199,6 +228,15 @@ class HarvestSimulation(ap.Model):
             font = pygame.font.Font(None, 24)
             text = font.render(f"Tractor {idx + 1}", True, (0, 0, 0))
             screen.blit(text, (WIDTH - 180, margin_top + idx * 70 - 20))
+
+    def dibujar_silo(self):
+        silo_width = 150
+        silo_height = 150
+        font = pygame.font.Font(None, 24)
+        pygame.draw.rect(screen, (105, 105, 105), (self.silo_position[0], self.silo_position[1], silo_width, silo_height))
+        label = font.render("Silo", True, (0, 0, 0))
+        label_rect = label.get_rect(center=(self.silo_position[0] + silo_width // 2, self.silo_position[1] - 20))
+        screen.blit(label, label_rect)
 
 # Ejecutar simulación
 model = HarvestSimulation()
