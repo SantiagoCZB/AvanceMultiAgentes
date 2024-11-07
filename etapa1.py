@@ -125,6 +125,7 @@ class HarvestSimulation(ap.Model):
         return objetivo
 
     def step(self):
+        self.font = pygame.font.Font(None, 24)  # Define la fuente una vez
         screen.fill(COLOR_EMPTY)
         self.dibujar_campo()
         
@@ -171,9 +172,14 @@ class HarvestSimulation(ap.Model):
                 pygame.draw.rect(screen, color, (x, y, GRID_SIZE, GRID_SIZE))
     
     def dibujar_tractores(self):
-        for tractor in self.tractores:
+        for idx, tractor in enumerate(self.tractores):
+            # Dibujar el contenedor y el tractor
             pygame.draw.circle(screen, tractor.contenedor.color, tractor.contenedor.position.astype(int), GRID_SIZE // 3)
             pygame.draw.circle(screen, COLOR_TRACTOR, tractor.position.astype(int), GRID_SIZE // 3)
+            
+            # Etiqueta del tractor
+            label = self.font.render(f"Tractor {idx + 1}", True, (0, 0, 0))
+            screen.blit(label, (tractor.position[0] - 15, tractor.position[1] - 30))  # Ajusta la posición del label si es necesario
     
     def dibujar_graficas(self):
         bar_width = 150
