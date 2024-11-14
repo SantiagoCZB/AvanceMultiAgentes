@@ -58,7 +58,7 @@ class Tractor(ap.Agent):
         self.contador_descarga = 0
         self.contenedor = Container(self.position.copy())
         self.q_table = np.zeros((ROWS, COLS))
-        self.epsilon = 0.15 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
+        self.epsilon = 0.05 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
         self.alpha = 0.1 # Tasa de aprendizaje
         self.gamma = 0.95 # Factor de descuento
         self.direccion = None  
