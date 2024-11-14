@@ -38,7 +38,6 @@ class Parcel(ap.Agent):
         if self.ready_to_harvest:
             self.ready_to_harvest = False
             self.harvested = True
-            self.reservada = False
 
 # Clase para el tractor/agente
 class Tractor(ap.Agent):
@@ -58,8 +57,8 @@ class Tractor(ap.Agent):
         self.descarga_duracion = 0
         self.contador_descarga = 0
         self.contenedor = Container(self.position.copy())
-        self.q_table = np.zeros((ROWS, COLS, self.carga_max + 1, int(self.combustible_max / 100) + 1, 5))
-        self.epsilon = 0.1 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
+        self.q_table = np.zeros((ROWS, COLS))
+        self.epsilon = 0.15 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
         self.alpha = 0.1 # Tasa de aprendizaje
         self.gamma = 0.95 # Factor de descuento
         self.direccion = None  
@@ -69,6 +68,7 @@ class Tractor(ap.Agent):
         self.save_flag = False
         self.fuel_flag = False
         self.load_q_table()  # Cargar Q-table si existe
+        self.siguiente_estado = None
 
     def mover(self, destino):
         if self.combustible > 0 and not self.descargando:
@@ -124,7 +124,7 @@ class Tractor(ap.Agent):
         if np.random.rand() < self.epsilon:
             accion = random.randint(0, 3)  # Acción aleatoria
         else:
-            accion = np.argmax(self.q_table[x, y, cargo, combustible])  # Acción codiciosa
+            accion = np.argmax(self.q_table[x, y])  # Acción codiciosa
 
         direction_vectors = {
             0: np.array([-1, 0]),  # Arriba
@@ -139,6 +139,7 @@ class Tractor(ap.Agent):
 
             next_x = np.clip(next_x, 0, ROWS - 1)
             next_y = np.clip(next_y, 0, COLS - 1)
+            self.siguiente_estado = (next_x, next_y, cargo, combustible)
 
             if parcelas_disponibles:
                 for parcela in parcelas_disponibles:
@@ -152,9 +153,6 @@ class Tractor(ap.Agent):
         return accion
 
     def step(self):
-        if self.save_flag:
-            self.save_q_table()
-            self.save_flag = False
         parcelas_disponibles = self.model.obtener_parcelas_disponibles(self)
         
         # Verificar si el tractor no se ha movido desde el último paso
@@ -169,11 +167,9 @@ class Tractor(ap.Agent):
             estado = (int(self.position[1] // GRID_SIZE), int(self.position[0] // GRID_SIZE), 
                       self.carga_actual, int(self.combustible // 100))
             recompensa = self.recompensa(accion)
-            siguiente_estado = (int(self.position[1] // GRID_SIZE), int(self.position[0] // GRID_SIZE), 
-                                self.carga_actual, int(self.combustible // 100))
-            self.actualizar_q_valor(estado, accion, recompensa, siguiente_estado)
+            self.actualizar_q_valor(estado, accion, recompensa, self.siguiente_estado)
             
-            if self.no_move_counter >= 50:
+            if self.no_move_counter >= 20:
                 self.forzar_mover_a_parcela_mas_cercana(parcelas_disponibles)
                 self.no_move_counter = 0
 
@@ -189,42 +185,24 @@ class Tractor(ap.Agent):
         if self.carga_anterior < self.carga_actual and self.cosechado_flag:
             self.cosechado_flag = False
             return 2
-        
-        if self.carga_actual == self.carga_max:
-            return 10
-        
-        if self.lost_flag:
-            self.lost_flag = False
-            print("Lost flag")
-            return -1
-        
-        if self.fuel_flag:
-            print("Out of fuel")
-            self.fuel_flag = False
-            return -10
 
         return -1
 
     def actualizar_q_valor(self, estado, accion, recompensa, siguiente_estado):
         x, y, cargo, combustible = estado
-        x_next, y_next, cargo_next, combustible_next = siguiente_estado
 
         # Asegurarse de que los índices estén dentro de los límites
         x = np.clip(x, 0, ROWS - 1)
         y = np.clip(y, 0, COLS - 1)
         cargo = np.clip(cargo, 0, self.carga_max)
         combustible = np.clip(combustible, 0, int(self.combustible_max / 100))
-
-        x_next = np.clip(x_next, 0, ROWS - 1)
-        y_next = np.clip(y_next, 0, COLS - 1)
-        cargo_next = np.clip(cargo_next, 0, self.carga_max)
-        combustible_next = np.clip(combustible_next, 0, int(self.combustible_max / 100))
+        
 
         # Obtener Q máximo para el siguiente estado
-        Q_max = np.max(self.q_table[x_next, y_next, cargo_next, combustible_next])
+        Q_max = np.max(self.q_table[x, y])
 
         # Actualizar Q-valor
-        self.q_table[x, y, cargo, combustible, accion] += self.alpha * (recompensa + self.gamma * Q_max - self.q_table[x, y, cargo, combustible, accion])
+        self.q_table[x, y] += self.alpha * (recompensa + self.gamma * Q_max - self.q_table[x, y])
 
     def forzar_mover_a_parcela_mas_cercana(self, parcelas_disponibles):
         if parcelas_disponibles:
@@ -232,6 +210,7 @@ class Tractor(ap.Agent):
             parcela_mas_cercana = parcelas_disponibles[0]
             self.objetivo_actual = (parcela_mas_cercana[0], parcela_mas_cercana[1])
             self.combustible_rate = 30
+            self.model.campo[parcela_mas_cercana[0]][parcela_mas_cercana[1]].reservada = True
             if not self.lost_flag:
                 self.lost_flag = True
 
@@ -325,9 +304,7 @@ class HarvestSimulation(ap.Model):
         if self.all_parcels_harvested():
             print("All parcels have been harvested. Stopping simulation.")
             for tractor in self.tractores:
-                tractor.save_flag = True
-                if tractor.epsilon >= 0.05:
-                    tractor.epsilon -= 0.05
+                tractor.save_q_table()
             model.setup()
             return
         
@@ -363,7 +340,6 @@ class HarvestSimulation(ap.Model):
                         if np.linalg.norm(destino - tractor.position) < tractor.speed:
                             if tractor.cargar():
                                 self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
-                                self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].reservada = False
                             tractor.objetivo_actual = None
                 
             if tractor.contenedor.ir_al_silo_flag:
@@ -385,7 +361,7 @@ class HarvestSimulation(ap.Model):
                 if parcela.reservada:
                     parcela.reservada_counter += 1
                     color = (255, 0, 0)
-                if parcela.reservada_counter > 5:
+                if parcela.reservada_counter > 8:
                     parcela.reservada = False
                     parcela.reservada_counter = 0
                 pygame.draw.rect(screen, color, (x, y, GRID_SIZE, GRID_SIZE))
