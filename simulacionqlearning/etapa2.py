@@ -58,9 +58,9 @@ class Tractor(ap.Agent):
         self.contador_descarga = 0
         self.contenedor = Container(self.position.copy())
         self.q_table = np.zeros((ROWS, COLS))
-        self.epsilon = 0.05 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
-        self.alpha = 0.1 # Tasa de aprendizaje
-        self.gamma = 0.95 # Factor de descuento
+        self.epsilon = 0.01 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
+        self.alpha = 0.05 # Tasa de aprendizaje
+        self.gamma = 0.75 # Factor de descuento
         self.direccion = None  
         self.cosechado_flag = False
         self.no_move_counter = 0
@@ -181,12 +181,44 @@ class Tractor(ap.Agent):
         x = int(self.position[1] // GRID_SIZE)
         y = int(self.position[0] // GRID_SIZE)
 
+        # Asegurarse de que los índices estén dentro de los límites
+        x = np.clip(x, 0, ROWS - 1)
+        y = np.clip(y, 0, COLS - 1)
+
+        recompensa = 0
+
         # Recompensa por moverse a una parcela para cosechar
         if self.carga_anterior < self.carga_actual and self.cosechado_flag:
             self.cosechado_flag = False
-            return 2
+            recompensa += 2  # Recompensa positiva por cosechar
 
-        return -1
+        # Penalización por inactividad (si no se ha movido en varios pasos)
+        if self.no_move_counter >= 20:
+            recompensa -= 3  
+
+        # Penalización por pasar por una parcela ya cosechada
+        if self.model.campo[x][y].harvested:
+            recompensa -= 1  # Penalización por pasar por una parcela ya cosechada
+
+        # Penalización por colisión
+        if self.detectar_colision():
+            recompensa -= 5 
+        
+        if self.objetivo_actual:
+            distancia = np.sqrt((x - self.objetivo_actual[0])**2 + 
+                            (y - self.objetivo_actual[1])**2)
+            # Recompensa inversamente proporcional a la distancia
+            recompensa += 5.0 / (distancia + 1) # Recompensa por moverse hacia el objetivo
+
+        return recompensa
+
+# Método para detectar colisión con otros tractores (simple ejemplo)
+    def detectar_colision(self):
+        for otro_tractor in self.model.tractores:
+            if otro_tractor.id != self.id and np.array_equal(self.position, otro_tractor.position):
+                return True
+        return False
+    
 
     def actualizar_q_valor(self, estado, accion, recompensa, siguiente_estado):
         x, y, cargo, combustible = estado
