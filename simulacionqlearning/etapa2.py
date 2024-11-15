@@ -57,9 +57,11 @@ class Tractor(ap.Agent):
         self.descarga_duracion = 0
         self.contador_descarga = 0
         self.contenedor = Container(self.position.copy())
+        self.direccion = None  
+        self.direccion_anterior = None
         self.q_table = np.zeros((ROWS, COLS))
-        self.epsilon = 0.01 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
-        self.alpha = 0.05 # Tasa de aprendizaje
+        self.epsilon = 0.8 # Mantener en 1 para entrenar, bajar a 0.05 para usar Q-table entrenada
+        self.alpha = 0.5 # Tasa de aprendizaje
         self.gamma = 0.75 # Factor de descuento
         self.direccion = None  
         self.cosechado_flag = False
@@ -75,6 +77,8 @@ class Tractor(ap.Agent):
             direccion = destino - self.position
             distancia = np.linalg.norm(direccion)
             if distancia > 0:
+                self.direccion_anterior = self.direccion  # Guardar dirección anterior
+                self.direccion = direccion / distancia  # Actualizar dirección actual
                 direccion = (direccion / distancia) * self.speed
                 self.position += direccion
                 self.position[0] = np.clip(self.position[0], 0, (COLS - 0.5) * GRID_SIZE)
@@ -190,25 +194,29 @@ class Tractor(ap.Agent):
         # Recompensa por moverse a una parcela para cosechar
         if self.carga_anterior < self.carga_actual and self.cosechado_flag:
             self.cosechado_flag = False
-            recompensa += 2  # Recompensa positiva por cosechar
+            recompensa += 0.5  # Recompensa positiva por cosechar
+
+        # Recompensa adicional por moverse a la parcela más cercana sin cambiar de dirección
+        if self.direccion_anterior is not None and np.allclose(self.direccion, self.direccion_anterior):
+            recompensa += 2  # Recompensa pequeña positiva
 
         # Penalización por inactividad (si no se ha movido en varios pasos)
         if self.no_move_counter >= 20:
-            recompensa -= 3  
+            recompensa -= 5  
 
         # Penalización por pasar por una parcela ya cosechada
         if self.model.campo[x][y].harvested:
-            recompensa -= 1  # Penalización por pasar por una parcela ya cosechada
+            recompensa -= 3  # Penalización por pasar por una parcela ya cosechada
 
         # Penalización por colisión
         if self.detectar_colision():
-            recompensa -= 5 
+            recompensa -= 3 
         
         if self.objetivo_actual:
             distancia = np.sqrt((x - self.objetivo_actual[0])**2 + 
                             (y - self.objetivo_actual[1])**2)
             # Recompensa inversamente proporcional a la distancia
-            recompensa += 5.0 / (distancia + 1) # Recompensa por moverse hacia el objetivo
+            recompensa += 2.0 / (distancia + 1) # Recompensa por moverse hacia el objetivo
 
         return recompensa
 
@@ -307,7 +315,7 @@ class HarvestSimulation(ap.Model):
         
         espaciado_x = (WIDTH - 180) // (TRACTOR_COUNT)
         posiciones_iniciales = [
-            (WIDTH - 200 - i * espaciado_x, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
+            (WIDTH - 200 - i * espaciado_x, HEIGHT + GRID_SIZE) for i in range(TRACTOR_COUNT)
         ]
         
         self.tractores = [Tractor(self, initial_position=pos, id=i) for i, pos in enumerate(posiciones_iniciales)]
