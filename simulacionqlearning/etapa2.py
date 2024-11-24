@@ -3,11 +3,13 @@ import pygame
 import numpy as np
 import random
 import agentpy as ap
+import requests_simulador as rs
 
 # Configuración inicial
 WIDTH, HEIGHT = 800, 600  # Ampliamos el ancho para dejar espacio a las gráficas
 GRID_SIZE = 20
 ROWS, COLS = HEIGHT // GRID_SIZE, (WIDTH - 200) // GRID_SIZE  # Ajustamos las columnas para el campo
+print(ROWS, COLS)
 TRACTOR_COUNT = 4
 TRACTOR_SPEED = 5
 
@@ -51,6 +53,7 @@ class Tractor(ap.Agent):
         self.combustible = self.combustible_max
         self.combustible_rate = 1
         self.position = np.array(initial_position, dtype=float)
+        rs.send_coordinates_background(self.id, round(self.position[0]), round(self.position[1]))
         self.previous_position = self.position.copy()
         self.objetivo_actual = None
         self.descargando = False
@@ -345,7 +348,7 @@ class HarvestSimulation(ap.Model):
             print("All parcels have been harvested. Stopping simulation.")
             for tractor in self.tractores:
                 tractor.save_q_table()
-            model.setup()
+            #model.setup()
             return
         
         for idx, tractor in enumerate(self.tractores):
@@ -380,6 +383,7 @@ class HarvestSimulation(ap.Model):
                         if np.linalg.norm(destino - tractor.position) < tractor.speed:
                             if tractor.cargar():
                                 self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
+                                rs.send_coordinates_background(tractor.id, round(tractor.position[0]), round(tractor.position[1]))
                             tractor.objetivo_actual = None
                 
             if tractor.contenedor.ir_al_silo_flag:
@@ -452,6 +456,7 @@ class HarvestSimulation(ap.Model):
                     return False
         return True
 
+rs.check_connection_background(TRACTOR_COUNT)
 # Ejecutar simulación
 model = HarvestSimulation()
 model.setup()
