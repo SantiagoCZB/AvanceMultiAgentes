@@ -4,6 +4,7 @@ import random
 import agentpy as ap
 from heapq import heappush, heappop
 from enum import Enum
+import requests_simulador as rs
 
 # Configuración inicial
 WIDTH, HEIGHT = 800, 600
@@ -54,7 +55,8 @@ class Parcel(ap.Agent):
             self.reservada = False
 
 class Tractor(ap.Agent):
-    def setup(self, initial_position):
+    def setup(self, initial_position, id):
+        self.id = id
         self.speed = TRACTOR_SPEED
         self.carga_max = 50
         self.carga_actual = 0
@@ -67,6 +69,7 @@ class Tractor(ap.Agent):
         self.contador_descarga = 0
         self.contenedor = Container(self.position.copy())
         self.path = []
+        rs.send_coordinates_background(self.id, round(self.position[0]), round(self.position[1]))
         # Inicializar con dirección hacia arriba
         self.current_direction = Direction.UP
         self.previous_direction = Direction.UP
@@ -279,7 +282,7 @@ class HarvestSimulation(ap.Model):
             (WIDTH - 200 - i * espaciado_x, HEIGHT - GRID_SIZE // 2) for i in range(TRACTOR_COUNT)
         ]
         
-        self.tractores = [Tractor(self, initial_position=pos) for pos in posiciones_iniciales]
+        self.tractores = [Tractor(self, initial_position=pos, id=i) for i, pos in enumerate(posiciones_iniciales)]
         
         # Establecer dirección inicial para cada tractor
         for tractor in self.tractores:
@@ -354,6 +357,7 @@ class HarvestSimulation(ap.Model):
                         
                         if np.linalg.norm(destino - tractor.position) < tractor.speed:
                             if tractor.cargar():
+                                rs.send_coordinates_background(tractor.id, round(tractor.position[0]), round(tractor.position[1]))
                                 self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvest()
                             tractor.objetivo_actual = None
                             tractor.path = []
@@ -454,6 +458,7 @@ class HarvestSimulation(ap.Model):
         screen.blit(label, label_rect)
 
 # Ejecutar simulación
+rs.check_connection_background(TRACTOR_COUNT)
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Simulación de Cosecha con A* y Movimiento Realista")
@@ -468,6 +473,6 @@ while running:
             running = False
     
     model.step()
-    pygame.time.delay(50)
+    pygame.time.delay(10)
 
 pygame.quit()
