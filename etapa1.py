@@ -7,7 +7,7 @@ import agentpy as ap
 WIDTH, HEIGHT = 800, 600  # Ampliamos el ancho para dejar espacio a las gráficas
 GRID_SIZE = 20
 ROWS, COLS = HEIGHT // GRID_SIZE, (WIDTH - 200) // GRID_SIZE  # Ajustamos las columnas para el campo
-TRACTOR_COUNT = 4
+TRACTOR_COUNT = 2
 TRACTOR_SPEED = 5
 
 # Colores

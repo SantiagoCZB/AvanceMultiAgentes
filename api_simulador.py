@@ -1,35 +1,35 @@
 from fastapi import FastAPI, Request, Query
 from fastapi import Request
-import pydub as pd
-import simpleaudio as sa
-from playsound import playsound
+#import pydub as pd
+#import simpleaudio as sa
+#from playsound import playsound
 
 
 app = FastAPI()
 
 tractor_path = []
 
-from pydub import AudioSegment
-import simpleaudio as sa
+#from pydub import AudioSegment
+#import simpleaudio as sa
 
 app = FastAPI()
 
 tractor_path = []
 
 # Load the audio file
-audio = AudioSegment.from_wav('soundtrack.wav')
-play_obj = None
+#audio = AudioSegment.from_wav('soundtrack.wav')
+#play_obj = None
 
-def play_audio():
-    global play_obj
-    if play_obj and play_obj.is_playing():
-        play_obj.stop()
-    play_obj = sa.play_buffer(audio.raw_data, num_channels=audio.channels, bytes_per_sample=audio.sample_width, sample_rate=audio.frame_rate)
+#def play_audio():
+#    global play_obj
+#    if play_obj and play_obj.is_playing():
+#        play_obj.stop()
+#    play_obj = sa.play_buffer(audio.raw_data, num_channels=audio.channels, bytes_per_sample=audio.sample_width, sample_rate=audio.frame_rate)
 
-def stop_audio():
-    global play_obj
-    if play_obj and play_obj.is_playing():
-        play_obj.stop()
+#def stop_audio():
+#    global play_obj
+#    if play_obj and play_obj.is_playing():
+#        play_obj.stop()
 
 
 def create_tractor_lists(n_tractors):
@@ -63,13 +63,13 @@ async def check_connection_endpoint(n_tractors: int = Query(...)):
     #play_audio()
     return {"message": "Connection OK"}
 
-@app.get("/stop_connection")
-async def stop_connection_endpoint():
-    stop_audio()
-    return {"message": "Connection stopped"}
+#@app.get("/stop_connection")
+#async def stop_connection_endpoint():
+#    stop_audio()
+#    return {"message": "Connection stopped"}
 
 if __name__ == "__main__":
-    playsound('./sfx.wav')
+#    playsound('./sfx.wav')
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
