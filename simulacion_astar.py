@@ -1,10 +1,10 @@
-import numpy as np
 import pygame
 import random
 import agentpy as ap
 from heapq import heappush, heappop
 from enum import Enum
 import requests_simulador as rs
+import numpy as np
 
 # Configuración inicial
 WIDTH, HEIGHT = 800, 600
@@ -67,7 +67,7 @@ class Tractor(ap.Agent):
         self.descargando = False
         self.descarga_duracion = 0
         self.contador_descarga = 0
-        self.contenedor = Container(self.position.copy())
+        # self.contenedor = Container(self.position.copy())
         self.path = []
         rs.send_coordinates_background(self.id, round(self.position[0]), round(self.position[1]))
         # Inicializar con dirección hacia arriba
@@ -235,42 +235,42 @@ class Tractor(ap.Agent):
         self.carga_actual = 0
         self.descarga_duracion = 30
         self.contador_descarga = self.descarga_duracion
-        self.contenedor.ir_al_silo_flag = True
+        # self.contenedor.ir_al_silo_flag = True
 
     def esperar(self):
         self.speed = 0
 
-    def mover_a_contenedor(self):
-        # En vez de moverse hacia el contenedor, esperar a que llegue
-        if np.linalg.norm(self.position - self.contenedor.position) > GRID_SIZE * 2:
-            self.esperar()
-        else:
-            self.descargar()
+    # def mover_a_contenedor(self):
+    #     # En vez de moverse hacia el contenedor, esperar a que llegue
+    #     if np.linalg.norm(self.position - self.contenedor.position) > GRID_SIZE * 2:
+    #         self.esperar()
+    #     else:
+    #         self.descargar()
 
-class Container:
-    def __init__(self, initial_position):
-        self.position = np.array(initial_position, dtype=float)
-        self.color = COLOR_CONTAINER
-        self.velocidad = TRACTOR_SPEED * 1.4
-        self.ir_al_silo_flag = False
+# class Container:
+#     def __init__(self, initial_position):
+#         self.position = np.array(initial_position, dtype=float)
+#         self.color = COLOR_CONTAINER
+#         self.velocidad = TRACTOR_SPEED * 1.4
+#         self.ir_al_silo_flag = False
 
-    def seguir_tractor(self, tractor_pos):
-        if not self.ir_al_silo_flag:
-            direccion = tractor_pos - self.position
-            distancia = np.linalg.norm(direccion)
-            if distancia > GRID_SIZE * 2:
-                direccion = (direccion / distancia) * self.velocidad
-                self.position += direccion
+#     def seguir_tractor(self, tractor_pos):
+#         if not self.ir_al_silo_flag:
+#             direccion = tractor_pos - self.position
+#             distancia = np.linalg.norm(direccion)
+#             if distancia > GRID_SIZE * 2:
+#                 direccion = (direccion / distancia) * self.velocidad
+#                 self.position += direccion
 
-    def ir_al_silo(self, silo_pos):
-        if self.ir_al_silo_flag:
-            direccion = silo_pos - self.position
-            distancia = np.linalg.norm(direccion)
-            if distancia > 10:
-                direccion = (direccion / distancia) * self.velocidad
-                self.position += direccion
-            if distancia < 10:
-                self.ir_al_silo_flag = False
+#     def ir_al_silo(self, silo_pos):
+#         if self.ir_al_silo_flag:
+#             direccion = silo_pos - self.position
+#             distancia = np.linalg.norm(direccion)
+#             if distancia > 10:
+#                 direccion = (direccion / distancia) * self.velocidad
+#                 self.position += direccion
+#             if distancia < 10:
+#                 self.ir_al_silo_flag = False
 
 class HarvestSimulation(ap.Model):
     
@@ -334,15 +334,15 @@ class HarvestSimulation(ap.Model):
         for idx, tractor in enumerate(self.tractores):
             if tractor.descargando:
                 tractor.contador_descarga -= 1
-                tractor.contenedor.color = COLOR_UNLOADING
+                # tractor.contenedor.color = COLOR_UNLOADING
                 if tractor.contador_descarga <= 0:
                     tractor.descargando = False
-                    tractor.contenedor.color = COLOR_CONTAINER
+                    # tractor.contenedor.color = COLOR_CONTAINER
             else:
                 if tractor.carga_actual >= tractor.carga_max:
-                    tractor.mover_a_contenedor()
-                    if np.linalg.norm(tractor.position - tractor.contenedor.position) < GRID_SIZE:
-                        tractor.descargar()
+                    # tractor.mover_a_contenedor()
+                    # if np.linalg.norm(tractor.position - tractor.contenedor.position) < GRID_SIZE:
+                    tractor.descargar()
                 else:
                     if tractor.objetivo_actual is None or self.campo[tractor.objetivo_actual[0]][tractor.objetivo_actual[1]].harvested:
                         tractor.objetivo_actual = self.obtener_parcela_prioritaria(tractor)
@@ -362,10 +362,10 @@ class HarvestSimulation(ap.Model):
                             tractor.objetivo_actual = None
                             tractor.path = []
                 
-            if tractor.contenedor.ir_al_silo_flag:
-                tractor.contenedor.ir_al_silo(self.silo_position)
-            else:
-                tractor.contenedor.seguir_tractor(tractor.position)
+            # if tractor.contenedor.ir_al_silo_flag:
+            #     tractor.contenedor.ir_al_silo(self.silo_position)
+            # else:
+            #     tractor.contenedor.seguir_tractor(tractor.position)
         
         self.dibujar_tractores()
         self.dibujar_graficas()
@@ -396,7 +396,7 @@ class HarvestSimulation(ap.Model):
                     pygame.draw.line(screen, (0, 0, 255), start_pos, end_pos, 2)
 
             # Dibujar el contenedor y el tractor
-            pygame.draw.circle(screen, tractor.contenedor.color, tractor.contenedor.position.astype(int), GRID_SIZE // 3)
+            # pygame.draw.circle(screen, tractor.contenedor.color, tractor.contenedor.position.astype(int), GRID_SIZE // 3)
             pygame.draw.circle(screen, COLOR_TRACTOR, tractor.position.astype(int), GRID_SIZE // 3)
             
             # Dibujar la dirección actual del tractor
